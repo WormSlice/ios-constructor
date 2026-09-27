@@ -1,7 +1,12 @@
-﻿# Videos locales para el tutorial
+﻿# Videos y Guiones Privados (NO SUBIR AL REPO PUBLICO)
 videos/
 *.mp4
 *.webm
+GUION_*.txt
+GUION_*.md
+*guion*
+generar_videos.py
+plantilla_flutter_ios/
 
 # Compilaciones y artefactos locales
 build/

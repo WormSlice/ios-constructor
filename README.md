@@ -62,10 +62,9 @@
 
 ---
 
-## 📄 Guías Detalladas Incluidas
+## 📄 Documentación Técnica
 
 * [GUIA_PASO_A_PASO_COMANDOS.md](GUIA_PASO_A_PASO_COMANDOS.md): Manual técnico completo con todos los comandos y enlaces de Apple Developer.
-* [GUION_VIDEO_TUTORIAL.md](GUION_VIDEO_TUTORIAL.md): Guion de video con la estructura paso a paso.
 
 ---
 Creado por **WormSlice Technologies**
