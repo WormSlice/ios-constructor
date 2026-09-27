@@ -1,0 +1,111 @@
+# ==============================================================================
+# PLANTILLA DE CODEMAGIC PARA COMPILAR FLUTTER EN WINDOWS HACIA TESTFLIGHT / APP STORE
+# ==============================================================================
+# Instrucciones de uso:
+# 1. Copia este archivo a la raíz de tu proyecto Flutter y renómbralo a: codemagic.yaml
+# 2. Configura en Codemagic Web (Environment variables):
+#    - Grupo de variables: "app_store_credentials"
+#      * APP_STORE_CONNECT_KEY_IDENTIFIER: El Key ID de tu clave API (10 caracteres, ej: GTQR99QA2Q)
+#      * APP_STORE_CONNECT_ISSUER_ID: El Issuer ID UUID de tu cuenta (ej: 69a6de88-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+#      * APP_STORE_CONNECT_PRIVATE_KEY: Contenido completo de tu archivo AuthKey_XXXXXX.p8
+#      * CERTIFICATE_PRIVATE_KEY: Clave RSA privada para generar certificados en la nube (o vacía si usas la integración automática)
+# 3. Cambia BUNDLE_ID con el identificador de tu aplicación (ej: com.tuempresa.tuapp).
+# ==============================================================================
+
+workflows:
+  ios-release:
+    name: iOS Release & TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      flutter: 3.24.0 # Cambia por tu versión de Flutter instalada (ej: 3.24.0, 3.27.0 o stable)
+      xcode: latest
+      cocoapods: default
+      groups:
+        - app_store_credentials # Conecta con las credenciales de App Store Connect
+      vars:
+        BUNDLE_ID: "com.tuempresa.tuapp"
+        XCODE_WORKSPACE: "ios/Runner.xcworkspace"
+        XCODE_SCHEME: "Runner"
+    scripts:
+      - name: Configurar variables de entorno (.env) si tu app las usa
+        script: |
+          echo "Configurando entorno de producción..."
+          # Si usas variables de entorno en assets/.env, descomenta y adapta:
+          # echo "API_KEY=${MI_API_KEY}" > .env
+          # mkdir -p assets
+          # cp .env assets/.env
+
+      - name: Limpiar y preparar dependencias CocoaPods
+        script: |
+          echo "Limpiando caché previa de CocoaPods para evitar conflictos de arquitectura..."
+          rm -rf ios/Pods ios/Podfile.lock ios/.symlinks
+          flutter clean
+          flutter pub get
+          cd ios
+          pod install --repo-update
+          cd ..
+
+      - name: Configurar firma de código automática (Code Signing)
+        script: |
+          echo "Obteniendo perfiles y certificados directamente de Apple Developer..."
+          # Esta herramienta oficial de Codemagic CLI se comunica con App Store Connect
+          # y descarga o genera el Distribution Profile y Certificate automáticamente:
+          xcode-project use-profiles
+
+      - name: Compilar IPA con auto-incremento de versión (Evita error Apple -19232)
+        script: |
+          # 1. Extraer versión de pubspec.yaml
+          VERSION_NAME=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d '+' -f 1 | tr -d '[:space:]')
+          VERSION_NAME=${VERSION_NAME:-1.0.0}
+          PUBSPEC_BUILD=$(grep '^version:' pubspec.yaml | sed 's/.*+//' | tr -d '[:space:]')
+          PUBSPEC_BUILD=${PUBSPEC_BUILD:-1}
+
+          # 2. Consultar el último número de build subido a TestFlight
+          LATEST_BUILD=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" 2>/dev/null || true)
+          echo "Último build en TestFlight: $LATEST_BUILD"
+          echo "Build en pubspec.yaml: $PUBSPEC_BUILD"
+
+          # 3. Calcular el siguiente build número strictly incremental
+          NEXT_BUILD=$PUBSPEC_BUILD
+          if [[ "$LATEST_BUILD" =~ ^[0-9]+$ ]] && [ "$LATEST_BUILD" -ge "$NEXT_BUILD" ]; then
+            NEXT_BUILD=$((LATEST_BUILD + 1))
+          fi
+          echo "Compilando versión $VERSION_NAME con Build Number: $NEXT_BUILD"
+
+          # 4. Actualizar configuración de Xcode
+          cd ios
+          agvtool new-version -all "$NEXT_BUILD" || true
+          agvtool new-marketing-version "$VERSION_NAME" || true
+          cd ..
+
+          # 5. Sincronizar Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION_NAME" ios/Runner/Info.plist || true
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEXT_BUILD" ios/Runner/Info.plist || true
+
+          # 6. Sincronizar Flutter Generated xcconfigs
+          mkdir -p ios/Flutter
+          sed -i '' '/FLUTTER_BUILD_NAME/d' ios/Flutter/Generated.xcconfig 2>/dev/null || true
+          sed -i '' '/FLUTTER_BUILD_NUMBER/d' ios/Flutter/Generated.xcconfig 2>/dev/null || true
+          echo "FLUTTER_BUILD_NAME=$VERSION_NAME" >> ios/Flutter/Generated.xcconfig
+          echo "FLUTTER_BUILD_NUMBER=$NEXT_BUILD" >> ios/Flutter/Generated.xcconfig
+          sed -i '' '/FLUTTER_BUILD_NAME/d' ios/Flutter/Release.xcconfig 2>/dev/null || true
+          sed -i '' '/FLUTTER_BUILD_NUMBER/d' ios/Flutter/Release.xcconfig 2>/dev/null || true
+          echo "FLUTTER_BUILD_NAME=$VERSION_NAME" >> ios/Flutter/Release.xcconfig
+          echo "FLUTTER_BUILD_NUMBER=$NEXT_BUILD" >> ios/Flutter/Release.xcconfig
+
+          # 7. Compilar IPA optimizado en Release
+          flutter build ipa --release \
+            --build-name="$VERSION_NAME" \
+            --build-number="$NEXT_BUILD" \
+            --export-options-plist=$HOME/export_options.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

@@ -1,0 +1,19 @@
+﻿{
+  "project": "App",
+  "platform": "ios",
+  "github": {
+    "owner": "WormSlice",
+    "repo": "ios-constructor"
+  },
+  "ios": {
+    "path": "ios",
+    "signing": true,
+    "configuration": "Release"
+  },
+  "flutter": {
+    "version": "3.44.1",
+    "watch": {}
+  },
+  "reactNative": {},
+  "mobai": {}
+}

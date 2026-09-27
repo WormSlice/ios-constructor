@@ -1,0 +1,19 @@
+{
+  "project": "NOMBRE_DE_TU_PROYECTO",
+  "platform": "ios",
+  "github": {
+    "owner": "TU_USUARIO_O_ORGANIZACION_GITHUB",
+    "repo": "NOMBRE_DE_TU_REPOSITORIO"
+  },
+  "ios": {
+    "path": "ios",
+    "signing": true,
+    "configuration": "Release"
+  },
+  "flutter": {
+    "version": "3.24.0",
+    "watch": {}
+  },
+  "reactNative": {},
+  "mobai": {}
+}

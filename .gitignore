@@ -1,0 +1,29 @@
+﻿# Videos locales para el tutorial
+videos/
+*.mp4
+*.webm
+
+# Compilaciones y artefactos locales
+build/
+dist/
+DerivedData/
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+flutter_drive.log
+
+# Secretos y credenciales personales (nunca subir al repo publico)
+*.p8
+*.p12
+*.mobileprovision
+*.key
+*.pem
+.env
