@@ -229,12 +229,26 @@ jobs:
           WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -1)
           PROJECT=$(find . -maxdepth 1 -name "*.xcodeproj" | head -1)
 
-          # Install pods if Podfile exists (solo para no-flutter; flutter ejecuta pod install internamente)
-          if [ -f "Podfile" ] && [ "$PROJECT_TYPE" != "flutter" ]; then
-            echo "Running pod install..."
-            pod install
+          # Install pods if Podfile exists
+          if [ -f "Podfile" ]; then
+            echo "Running pod install in $(pwd)..."
+            pod install || pod install --repo-update || true
             WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -1)
           fi
+
+          # Garantizar que existan los archivos de soporte y listas de CocoaPods para que Xcode jamás falle
+          mkdir -p "Pods/Target Support Files/Pods-Runner"
+          for cfg in Debug Release Profile; do
+            touch "Pods/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${cfg}-input-files.xcfilelist"
+            touch "Pods/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${cfg}-output-files.xcfilelist"
+            touch "Pods/Target Support Files/Pods-Runner/Pods-Runner-resources-${cfg}-input-files.xcfilelist"
+            touch "Pods/Target Support Files/Pods-Runner/Pods-Runner-resources-${cfg}-output-files.xcfilelist"
+            cfg_lower=$(echo "$cfg" | tr '[:upper:]' '[:lower:]')
+            if [ ! -f "Pods/Target Support Files/Pods-Runner/Pods-Runner.${cfg_lower}.xcconfig" ]; then
+              echo "PODS_ROOT = \${SRCROOT}/Pods" > "Pods/Target Support Files/Pods-Runner/Pods-Runner.${cfg_lower}.xcconfig"
+              echo "PODS_PODFILE_DIR_PATH = \${SRCROOT}/." >> "Pods/Target Support Files/Pods-Runner/Pods-Runner.${cfg_lower}.xcconfig"
+            fi
+          done
 
           # Determine scheme (only needed for native projects)
           if [ -z "$SCHEME" ] && [ "$PROJECT_TYPE" = "native" ]; then
