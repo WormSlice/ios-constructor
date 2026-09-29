@@ -167,6 +167,33 @@ O con comandos directos:
 
 *El CLI monitorea el workflow en GitHub Actions, espera a que termine el runner de macOS y descarga el archivo `.ipa` final directamente en tu carpeta local `dist/` de Windows.*
 
+### 4.4. Cómo Instalar el .ipa en tu iPhone Físico (Método Gratuito con Sideloadly)
+
+> [!WARNING]
+> **¿Por qué falla si intentas instalar el `.ipa` directo por iTunes o línea de comandos?**  
+> Apple iOS tiene un bloqueo de seguridad estricto a nivel de sistema (`installd`). Un iPhone físico **rechaza tajantemente** cualquier archivo `.ipa` compilado con `--unsigned` porque carece de una firma criptográfica y un perfil de aprovisionamiento vinculado al UDID del dispositivo.  
+> Sin embargo, **Apple permite que cualquier persona con un Apple ID gratis (tu cuenta normal de iCloud)** firme e instale hasta 3 aplicaciones de prueba en su teléfono por 7 días.
+
+Para firmarlo e instalarlo gratis en 20 segundos desde Windows:
+
+1. **Requisitos Previos:**
+   - Tener **iTunes** abierto en Windows (esto asegura que los drivers de comunicación USB de Apple estén activos).
+   - Conectar tu iPhone a la PC por cable USB. En la pantalla del iPhone pulsa **"Confiar en esta computadora"** e ingresa tu código de bloqueo.
+2. **Descargar y Abrir Sideloadly:**
+   - Descarga [Sideloadly](https://sideloadly.io/) (versión Windows de 64 bits).
+   - Al abrirlo, verifica que en el campo **Device** aparezca tu iPhone detectado.
+3. **Firmar e Instalar:**
+   - Arrastra el archivo `dist/App.ipa` al icono grande de IPA en Sideloadly.
+   - En el campo **Apple ID**, escribe tu correo habitual de Apple / iCloud (no requiere pagar nada).
+   - Haz clic en el botón azul **Start**. (Si es la primera vez, te solicitará la contraseña de tu Apple ID para autenticarse con el servidor de desarrollo de Apple).
+   - Sideloadly genera el certificado personal gratuito, firma el archivo en tu PC y lo inyecta por USB al iPhone.
+4. **Habilitar la App en el iPhone (Paso de Seguridad Obligatorio de iOS):**
+   - Al tocar el icono por primera vez, iOS mostrará *"Desarrollador no confiable"*.
+   - Ve a: **Ajustes** -> **General** -> **VPN y gestión de dispositivos** (o *Administración de dispositivos*).
+   - Toca sobre tu correo de Apple y pulsa el botón **"Confiar en [tu correo]"**.
+   - *(En iOS 16, 17 y 18)*: Ve a **Ajustes** -> **Privacidad y seguridad** -> baja hasta el final a **Modo de desarrollador**, actívalo y confirma el reinicio del iPhone.
+   - ¡Listo! Abre tu app y correrá de forma nativa en tu iPhone sin costo.
+
 ---
 
 ## ☁️ 5. MÉTODO 2: Pipeline Profesional con CodeMagic (Directo a TestFlight)
