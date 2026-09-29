@@ -123,7 +123,6 @@ jobs:
           EOF
           fi
           flutter pub get
-          flutter build ios --config-only --no-codesign || true
 
       - name: Create .env file
         if: steps.detect.outputs.type == 'flutter'
@@ -222,48 +221,6 @@ jobs:
         run: |
           set -e
 
-          # Navigate to iOS project
-          cd "$IOS_PATH"
-
-          # Find workspace or project
-          WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -1)
-          PROJECT=$(find . -maxdepth 1 -name "*.xcodeproj" | head -1)
-
-          # Install pods if Podfile exists
-          if [ -f "Podfile" ]; then
-            echo "Running pod install in $(pwd)..."
-            pod install || pod install --repo-update || true
-            WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -1)
-          fi
-
-          # Garantizar que existan los archivos de soporte y listas de CocoaPods para que Xcode jamás falle
-          mkdir -p "Pods/Target Support Files/Pods-Runner"
-          for cfg in Debug Release Profile; do
-            touch "Pods/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${cfg}-input-files.xcfilelist"
-            touch "Pods/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${cfg}-output-files.xcfilelist"
-            touch "Pods/Target Support Files/Pods-Runner/Pods-Runner-resources-${cfg}-input-files.xcfilelist"
-            touch "Pods/Target Support Files/Pods-Runner/Pods-Runner-resources-${cfg}-output-files.xcfilelist"
-            cfg_lower=$(echo "$cfg" | tr '[:upper:]' '[:lower:]')
-            if [ ! -f "Pods/Target Support Files/Pods-Runner/Pods-Runner.${cfg_lower}.xcconfig" ]; then
-              echo "PODS_ROOT = \${SRCROOT}/Pods" > "Pods/Target Support Files/Pods-Runner/Pods-Runner.${cfg_lower}.xcconfig"
-              echo "PODS_PODFILE_DIR_PATH = \${SRCROOT}/." >> "Pods/Target Support Files/Pods-Runner/Pods-Runner.${cfg_lower}.xcconfig"
-            fi
-          done
-
-          # Determine scheme (only needed for native projects)
-          if [ -z "$SCHEME" ] && [ "$PROJECT_TYPE" = "native" ]; then
-            if [ -n "$WORKSPACE" ]; then
-              SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list 2>/dev/null | grep -A 100 "Schemes:" | tail -n +2 | grep -v -E "^[[:space:]]*Pods-" | head -1 | xargs)
-              if [ -z "$SCHEME" ]; then
-                SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list 2>/dev/null | grep -A 100 "Schemes:" | tail -n +2 | head -1 | xargs)
-              fi
-            elif [ -n "$PROJECT" ]; then
-              SCHEME=$(xcodebuild -project "$PROJECT" -list 2>/dev/null | grep -A 100 "Schemes:" | tail -n +2 | head -1 | xargs)
-            fi
-            echo "Building with scheme: $SCHEME (configuration: $CONFIGURATION)"
-          fi
-
-          # Use custom DerivedData path for caching
           DERIVED_DATA_PATH="${GITHUB_WORKSPACE}/DerivedData"
 
           if [ "$PROJECT_TYPE" = "flutter" ]; then
@@ -381,67 +338,77 @@ jobs:
                 flutter build ios --release --no-codesign
               fi
             fi
-            cd "$IOS_PATH"
-          elif [ "$PROJECT_TYPE" = "reactnative" ] || [ "$PROJECT_TYPE" = "expo" ]; then
-            # Use xcodebuild directly for React Native/Expo
-            echo "Building React Native iOS ($CONFIGURATION)..."
-            BUILD_CMD="xcodebuild"
-            if [ -n "$WORKSPACE" ]; then
-              BUILD_CMD="$BUILD_CMD -workspace $WORKSPACE"
-            elif [ -n "$PROJECT" ]; then
-              BUILD_CMD="$BUILD_CMD -project $PROJECT"
-            fi
-
-            # Auto-detect scheme from workspace name (e.g., MyApp.xcworkspace -> MyApp)
-            if [ -n "$WORKSPACE" ]; then
-              SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-            elif [ -n "$PROJECT" ]; then
-              SCHEME=$(basename "$PROJECT" .xcodeproj)
-            fi
-
-            BUILD_CMD="$BUILD_CMD -scheme $SCHEME"
-            BUILD_CMD="$BUILD_CMD -configuration $CONFIGURATION"
-            BUILD_CMD="$BUILD_CMD -destination 'generic/platform=iOS'"
-            BUILD_CMD="$BUILD_CMD -derivedDataPath $DERIVED_DATA_PATH"
-            BUILD_CMD="$BUILD_CMD CODE_SIGNING_ALLOWED=NO"
-            BUILD_CMD="$BUILD_CMD COMPILER_INDEX_STORE_ENABLE=NO"
-            BUILD_CMD="$BUILD_CMD -quiet build"
-
-            echo "Running: $BUILD_CMD"
-            eval $BUILD_CMD
           else
-            BUILD_CMD="xcodebuild"
-            if [ -n "$WORKSPACE" ]; then
-              BUILD_CMD="$BUILD_CMD -workspace $WORKSPACE"
-            elif [ -n "$PROJECT" ]; then
-              BUILD_CMD="$BUILD_CMD -project $PROJECT"
+            cd "$IOS_PATH"
+            WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -1)
+            PROJECT=$(find . -maxdepth 1 -name "*.xcodeproj" | head -1)
+
+            if [ -f "Podfile" ]; then
+              echo "Running pod install in $(pwd)..."
+              pod install || pod install --repo-update || true
+              WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -1)
             fi
 
-            BUILD_CMD="$BUILD_CMD -scheme $SCHEME"
-            BUILD_CMD="$BUILD_CMD -configuration $CONFIGURATION"
-            BUILD_CMD="$BUILD_CMD -destination 'generic/platform=iOS'"
-            BUILD_CMD="$BUILD_CMD -derivedDataPath $DERIVED_DATA_PATH"
+            if [ "$PROJECT_TYPE" = "reactnative" ] || [ "$PROJECT_TYPE" = "expo" ]; then
+              echo "Building React Native iOS ($CONFIGURATION)..."
+              BUILD_CMD="xcodebuild"
+              if [ -n "$WORKSPACE" ]; then
+                BUILD_CMD="$BUILD_CMD -workspace $WORKSPACE"
+              elif [ -n "$PROJECT" ]; then
+                BUILD_CMD="$BUILD_CMD -project $PROJECT"
+              fi
 
-            # Speed optimization flags
-            BUILD_CMD="$BUILD_CMD COMPILER_INDEX_STORE_ENABLE=NO"
-            BUILD_CMD="$BUILD_CMD DEBUG_INFORMATION_FORMAT=dwarf"
-            BUILD_CMD="$BUILD_CMD ONLY_ACTIVE_ARCH=YES"
-            BUILD_CMD="$BUILD_CMD -quiet"
+              if [ -n "$WORKSPACE" ]; then
+                SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+              elif [ -n "$PROJECT" ]; then
+                SCHEME=$(basename "$PROJECT" .xcodeproj)
+              fi
 
-            # Xcode 16+ native compilation caching
-            BUILD_CMD="$BUILD_CMD SWIFT_ENABLE_COMPILE_CACHE=YES"
-            BUILD_CMD="$BUILD_CMD CLANG_ENABLE_COMPILE_CACHE=YES"
+              BUILD_CMD="$BUILD_CMD -scheme $SCHEME"
+              BUILD_CMD="$BUILD_CMD -configuration $CONFIGURATION"
+              BUILD_CMD="$BUILD_CMD -destination 'generic/platform=iOS'"
+              BUILD_CMD="$BUILD_CMD -derivedDataPath $DERIVED_DATA_PATH"
+              BUILD_CMD="$BUILD_CMD CODE_SIGNING_ALLOWED=NO"
+              BUILD_CMD="$BUILD_CMD COMPILER_INDEX_STORE_ENABLE=NO"
+              BUILD_CMD="$BUILD_CMD -quiet build"
 
-            if [ "$USE_SIGNING" = "true" ]; then
-              # For signed builds, use archive
-              BUILD_CMD="$BUILD_CMD -archivePath ../build/App.xcarchive archive"
+              echo "Running: $BUILD_CMD"
+              eval $BUILD_CMD
             else
-              # For unsigned builds, use faster 'build' action
-              BUILD_CMD="$BUILD_CMD CODE_SIGNING_ALLOWED=NO build"
-            fi
+              if [ -z "$SCHEME" ]; then
+                if [ -n "$WORKSPACE" ]; then
+                  SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list 2>/dev/null | grep -A 100 "Schemes:" | tail -n +2 | grep -v -E "^[[:space:]]*Pods-" | head -1 | xargs)
+                elif [ -n "$PROJECT" ]; then
+                  SCHEME=$(xcodebuild -project "$PROJECT" -list 2>/dev/null | grep -A 100 "Schemes:" | tail -n +2 | head -1 | xargs)
+                fi
+              fi
+              echo "Building with scheme: $SCHEME (configuration: $CONFIGURATION)"
 
-            echo "Running: $BUILD_CMD"
-            eval $BUILD_CMD
+              BUILD_CMD="xcodebuild"
+              if [ -n "$WORKSPACE" ]; then
+                BUILD_CMD="$BUILD_CMD -workspace $WORKSPACE"
+              elif [ -n "$PROJECT" ]; then
+                BUILD_CMD="$BUILD_CMD -project $PROJECT"
+              fi
+
+              BUILD_CMD="$BUILD_CMD -scheme $SCHEME"
+              BUILD_CMD="$BUILD_CMD -configuration $CONFIGURATION"
+              BUILD_CMD="$BUILD_CMD -destination 'generic/platform=iOS'"
+              BUILD_CMD="$BUILD_CMD -derivedDataPath $DERIVED_DATA_PATH"
+              BUILD_CMD="$BUILD_CMD COMPILER_INDEX_STORE_ENABLE=NO"
+              BUILD_CMD="$BUILD_CMD DEBUG_INFORMATION_FORMAT=dwarf"
+              BUILD_CMD="$BUILD_CMD ONLY_ACTIVE_ARCH=YES"
+              BUILD_CMD="$BUILD_CMD -quiet"
+
+              if [ "$USE_SIGNING" = "true" ]; then
+                BUILD_CMD="$BUILD_CMD -archivePath ../build/App.xcarchive archive"
+              else
+                BUILD_CMD="$BUILD_CMD CODE_SIGNING_ALLOWED=NO build"
+              fi
+
+              echo "Running: $BUILD_CMD"
+              eval $BUILD_CMD
+            fi
           fi
 
           # Create IPA
