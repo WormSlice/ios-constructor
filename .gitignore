@@ -1,4 +1,4 @@
-﻿# Videos y Guiones Privados (NO SUBIR AL REPO PUBLICO)
+# Videos y Guiones Privados (NO SUBIR AL REPO PUBLICO)
 videos/
 *.mp4
 *.webm
@@ -16,6 +16,9 @@ DerivedData/
 .packages
 .flutter-plugins
 .flutter-plugins-dependencies
+ios/Flutter/ephemeral/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
 
 # Python
 __pycache__/

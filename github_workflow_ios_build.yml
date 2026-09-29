@@ -65,6 +65,8 @@ jobs:
         run: |
           if [ -f "pubspec.yaml" ]; then
             echo "type=flutter" >> $GITHUB_OUTPUT
+          elif [ -f "ios/Podfile" ] && grep -qi "flutter" ios/Podfile 2>/dev/null; then
+            echo "type=flutter" >> $GITHUB_OUTPUT
           elif [ -f "package.json" ] && grep -q '"expo"' package.json; then
             echo "type=expo" >> $GITHUB_OUTPUT
           elif [ -f "package.json" ] && grep -q '"react-native"' package.json; then
@@ -81,9 +83,47 @@ jobs:
           channel: ${{ inputs.flutter_version && 'stable' || 'stable' }}
           cache: true
 
-      - name: Flutter pub get
+      - name: Prepare Flutter Project and Dependencies
         if: steps.detect.outputs.type == 'flutter'
-        run: flutter pub get
+        run: |
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "Aviso: No se encontro pubspec.yaml. Generando plantilla base..."
+            cat << 'EOF' > pubspec.yaml
+          name: app
+          description: "iOS Constructor Starter App"
+          publish_to: 'none'
+          version: 1.0.0+1
+          environment:
+            sdk: '>=3.0.0 <4.0.0'
+          dependencies:
+            flutter:
+              sdk: flutter
+            cupertino_icons: ^1.0.8
+          flutter:
+            uses-material-design: true
+          EOF
+          fi
+          if [ ! -d "lib" ] || [ ! -f "lib/main.dart" ]; then
+            echo "Aviso: No se encontro lib/main.dart. Generando pantalla base..."
+            mkdir -p lib
+            cat << 'EOF' > lib/main.dart
+          import 'package:flutter/material.dart';
+
+          void main() => runApp(const MyApp());
+
+          class MyApp extends StatelessWidget {
+            const MyApp({super.key});
+            @override
+            Widget build(BuildContext context) {
+              return const MaterialApp(
+                home: Scaffold(body: Center(child: Text('¡Compilado con éxito desde Windows!'))),
+              );
+            }
+          }
+          EOF
+          fi
+          flutter pub get
+          flutter build ios --config-only --no-codesign || true
 
       - name: Create .env file
         if: steps.detect.outputs.type == 'flutter'
@@ -189,8 +229,8 @@ jobs:
           WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -1)
           PROJECT=$(find . -maxdepth 1 -name "*.xcodeproj" | head -1)
 
-          # Install pods if Podfile exists (always run to ensure sync with Podfile.lock)
-          if [ -f "Podfile" ]; then
+          # Install pods if Podfile exists (solo para no-flutter; flutter ejecuta pod install internamente)
+          if [ -f "Podfile" ] && [ "$PROJECT_TYPE" != "flutter" ]; then
             echo "Running pod install..."
             pod install
             WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -1)
